@@ -1,11 +1,80 @@
-## Name: James TAdemy
-# Course: CIS261
-# Lab Title: Course project 3
-
+# James Tademy II - CIS261 - Course Project Phase 3
 import os
 from datetime import datetime
 
-FILENAME = "employee_data.txt"
+EMPLOYEE_FILE = "employee_data.txt"
+USER_FILE = "user_login.txt"
+
+class Login:
+    def __init__(self, user_id, password, auth_code):
+        self.user_id = user_id
+        self.password = password
+        self.auth_code = auth_code
+
+# --- USER ACCOUNT MANAGEMENT FUNCTIONS ---
+
+def load_users():
+    users = []
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, "r") as file:
+            for line in file:
+                user_id, password, auth_code = line.strip().split("|")
+                users.append(Login(user_id, password, auth_code))
+    return users
+
+def add_users():
+    existing_users = load_users()
+    user_ids = [u.user_id for u in existing_users]
+
+    print("\n=== Add New Users ===")
+    while True:
+        user_id = input("Enter new User ID (or 'End' to finish): ")
+        if user_id.lower() == "end":
+            break
+        if user_id in user_ids:
+            print("User ID already exists.")
+            continue
+        password = input("Enter password: ")
+        auth_code = input("Enter authorization code (Admin/User): ").capitalize()
+        if auth_code not in ["Admin", "User"]:
+            print("Invalid authorization code.")
+            continue
+        with open(USER_FILE, "a") as file:
+            file.write(f"{user_id}|{password}|{auth_code}\n")
+        user_ids.append(user_id)
+        print("User added.\n")
+
+def display_users():
+    print("\n=== Current Users ===")
+    if not os.path.exists(USER_FILE):
+        print("No user data found.")
+        return
+    with open(USER_FILE, "r") as file:
+        for line in file:
+            user_id, password, auth_code = line.strip().split("|")
+            print(f"User ID: {user_id} | Password: {password} | Role: {auth_code}")
+    print("=====================\n")
+
+def login():
+    users = load_users()
+    user_map = {u.user_id: u for u in users}
+
+    user_id = input("Enter your User ID: ")
+    if user_id not in user_map:
+        print("User ID not found.")
+        return None
+
+    password = input("Enter your password: ")
+    user = user_map[user_id]
+
+    if user.password != password:
+        print("Incorrect password.")
+        return None
+
+    print(f"\nWelcome, {user.user_id} ({user.auth_code})\n")
+    return user
+
+# --- PAYROLL ENTRY FUNCTIONS ---
 
 def get_date_range():
     from_date = input("Enter FROM date (mm/dd/yyyy): ")
@@ -30,6 +99,10 @@ def calculate_pay(total_hours, hourly_rate, tax_rate):
     net_pay = gross_pay - income_tax
     return gross_pay, income_tax, net_pay
 
+def write_employee_record(record):
+    with open(EMPLOYEE_FILE, "a") as file:
+        file.write(record + "\n")
+
 def display_totals(totals):
     print("\n======= Payroll Summary =======")
     print(f"Total Employees: {totals['employees']}")
@@ -39,22 +112,19 @@ def display_totals(totals):
     print(f"Total Net Pay: ${totals['net_pay']:.2f}")
     print("===============================\n")
 
-def write_to_file(record):
-    with open(FILENAME, "a") as file:
-        file.write(record + "\n")
-
-def read_and_display_records():
-    if not os.path.exists(FILENAME):
-        print("No data file found.")
+def read_and_display_records(user_obj):
+    if not os.path.exists(EMPLOYEE_FILE):
+        print("No payroll data file found.")
         return
 
-    user_date = input("Enter FROM date to filter by (mm/dd/yyyy) or 'All' to show all: ")
+    print(f"\nLogged in as: {user_obj.user_id} | Role: {user_obj.auth_code}")
+    user_date = input("Enter FROM date to filter by (mm/dd/yyyy) or 'All': ")
 
     if user_date.lower() != "all":
         try:
             datetime.strptime(user_date, "%m/%d/%Y")
         except ValueError:
-            print("Invalid date format. Please use mm/dd/yyyy.")
+            print("Invalid date format.")
             return
 
     totals = {
@@ -65,7 +135,7 @@ def read_and_display_records():
         "net_pay": 0
     }
 
-    with open(FILENAME, "r") as file:
+    with open(EMPLOYEE_FILE, "r") as file:
         for line in file:
             from_date, to_date, name, hours, rate, tax_rate = line.strip().split("|")
             if user_date.lower() == "all" or from_date == user_date:
@@ -92,24 +162,38 @@ def read_and_display_records():
 
     display_totals(totals)
 
+# --- MAIN PROGRAM ---
+
 def main():
-    print("=== Employee Payroll Entry ===")
-    while True:
-        name = get_employee_name()
-        if name.lower() == "end":
-            break
+    print("=== CIS261 Payroll System ===")
+    mode = input("Do you want to (L)ogin or (A)dd Users? ").lower()
 
-        from_date, to_date = get_date_range()
-        hours = get_total_hours()
-        rate = get_hourly_rate()
-        tax_rate = get_tax_rate()
+    if mode == "a":
+        add_users()
+        display_users()
+        return
 
-        record = f"{from_date}|{to_date}|{name}|{hours}|{rate}|{tax_rate}"
-        write_to_file(record)
-        print("Employee data saved.\n")
+    user = login()
+    if not user:
+        return
+
+    if user.auth_code.lower() == "admin":
+        print("=== Employee Payroll Entry ===")
+        while True:
+            name = get_employee_name()
+            if name.lower() == "end":
+                break
+            from_date, to_date = get_date_range()
+            hours = get_total_hours()
+            rate = get_hourly_rate()
+            tax_rate = get_tax_rate()
+
+            record = f"{from_date}|{to_date}|{name}|{hours}|{rate}|{tax_rate}"
+            write_employee_record(record)
+            print("Record saved.\n")
 
     print("\n=== Payroll Report ===")
-    read_and_display_records()
+    read_and_display_records(user)
 
 if __name__ == "__main__":
     main()
